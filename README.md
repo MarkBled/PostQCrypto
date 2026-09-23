@@ -34,7 +34,7 @@ If you represent a corporate entity, government body, or defense contractor inte
 
 To negotiate proprietary enterprise licensing, dual-licensing models, or closed-source integration, please contact the author directly:
 
-📩 **Contact Email:** `your-professional-email@example.com`  
+📩 **Contact Email:** `infokrog.bled@gmail.com`  
 *Please include "Commercial Inquiry: QKD-Matrix Protocol" in your subject line.*
 
 ---
