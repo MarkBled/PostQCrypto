@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIT-LBC Protocol: Matrix-Index Transmission via Lattice-Based Cryptography</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #0d1117; color: #c9d1d9; padding: 20px; line-height: 1.6; }
+        .container { max-width: 800px; margin: 0 auto; background: #161b22; padding: 30px; border-radius: 10px; border: 1px border #30363d; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        h1 { color: #58a6ff; border-bottom: 1px solid #30363d; padding-bottom: 10px; margin-top: 0; }
+        h3 { color: #f0883e; margin-bottom: 5px; }
+        .box { background: #21262d; border: 1px solid #30363d; padding: 15px; border-radius: 6px; margin-bottom: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .vector { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 1.1em; color: #58a6ff; letter-spacing: 2px; }
+        .noise-text { color: #ff7b72; font-weight: bold; }
+        .success-text { color: #56d364; font-weight: bold; font-size: 1.2em; }
+        button { background-color: #238636; color: white; border: none; padding: 10px 20px; font-size: 1em; border-radius: 6px; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #2ea44f; }
+        label { font-weight: bold; display: block; margin-bottom: 8px; }
+        input[type="range"] { width: 100%; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Matrix-Index Transmission Protocol (MIT-LBC)</h1>
+    <h3>Interactive Proof of Concept via Lattice-Based Cryptography</h3>
+    
+    <p>This interactive prototype demonstrates the <strong>asymmetric noise resilience</strong> of the MIT-LBC architecture. It shows how the isolated matrix <strong>M</strong> utilizes high-dimensional lattice rounding to recover the secret index from transmission noise (induced by fiber degradation or Eve's eavesdropping) without transmitting ciphertext.</p>
+    
+    <p><strong>Notice the threshold:</strong> within safe mathematical bounds, Bob's local matrix allows him to successfully decode the index while Eve faces an uncomputable chaotic space (NP-hard). However, if the noise amplitude shifts the vector beyond the strict lattice quantization bounds (e.g., higher error magnitudes), the protocol intentionally fails to prevent compromise, demonstrating the real-world physical limits of the system.</p>
+
+    <!-- STEP 1: ALICE -->
+    <div class="box">
+        <h3>1. Alice's Input (Private Key State)</h3>
+        <p>Alice defines a private coordinate vector <span class="vector">s</span>. She computes the vector <span class="vector">b = M · s + e (mod q)</span>.</p>
+        <div>
+            <label>Adjust Transmission Noise Vector <span class="noise-text">(e)</span> Magnitude:</label>
+            <input type="range" id="noiseSlider" min="0" max="3" value="1" oninput="simulateProtocol()">
+            <p>Current Noise Multiplier: <span id="noiseVal" class="noise-text">1</span></p>
+        </div>
+        <p><strong>Vector s (Secret Index):</strong> <span id="aliceS" class="vector">[3, 5]</span></p>
+    </div>
+
+    <!-- STEP 2: THE UNSECURE CHANNEL -->
+    <div class="box" style="border-color: #ff7b72;">
+        <h3>2. Public Quantum Channel Transmission</h3>
+        <p>This is the token vector <span class="vector">b</span> intercepted by Eve on the fiber network. It looks completely random due to the added error.</p>
+        <p><strong>Transmitted Seed Vector b (with noise):</strong> <span id="channelB" class="vector" style="color: #ff7b72;">[...]</span></p>
+    </div>
+
+    <!-- STEP 3: BOB'S LOCAL RECONSTRUCTION -->
+    <div class="box" style="border-color: #56d364;">
+        <h3>3. Bob's Local Galvanically Isolated Evaluation</h3>
+        <p>Bob applies his locally embedded hardware Matrix <strong>M</strong>. Using Nearest Lattice Vector decoding, he strips away the noise natively.</p>
+        
+        <div class="grid">
+            <div>
+                <p><strong>Bob's Reconstructed s':</strong></p>
+                <span id="bobS" class="vector" style="color: #56d364;">[...]</span>
+            </div>
+            <div>
+                <p><strong>Protocol Integrity:</strong></p>
+                <span id="status" class="success-text">Checking...</span>
+            </div>
+        </div>
+    </div>
+
+    <button onclick="generateNewKeys()">Generate New Random Secret Matrix & Keys</button>
+</div>
+
+<script>
+    // Hardcoded Parameters for LWE Toy Model (m=4, n=2, q=17)
+    const q = 17;
+    let M = [[2, 5], [7, 1], [4, 3], [1, 6]]; // Shared Hardcoded Matrix M
+    let s = [3, 5]; // Secret coordinate vector
+
+    function simulateProtocol() {
+        const noiseMultiplier = parseInt(document.getElementById('noiseSlider').value);
+        document.getElementById('noiseVal').innerText = noiseMultiplier;
+
+        // Base Gaussian-like error vector
+        const base_e = [1, 0, -1, 1];
+        let e = base_e.map(val => val * noiseMultiplier);
+
+        // Compute b = (M * s + e) % q
+        let b = [];
+        for (let i = 0; i < 4; i++) {
+            let dotProduct = M[i][0] * s[0] + M[i][1] * s[1];
+            let val = (dotProduct + e[i]) % q;
+            if (val < 0) val += q; // JavaScript Modulo fix for negative numbers
+            b.push(val);
+        }
+
+        document.getElementById('aliceS').innerText = JSON.stringify(s);
+        document.getElementById('channelB').innerText = JSON.stringify(b);
+
+        // Bob Decodes locally by performing a brute-force nearest lattice point search (for n=2)
+        let best_s = [0, 0];
+        let min_dist = Infinity;
+
+        for (let x1 = 0; x1 < q; x1++) {
+            for (let x2 = 0; x2 < q; x2++) {
+                let current_dist = 0;
+                for (let i = 0; i < 4; i++) {
+                    let Ax_i = (M[i][0] * x1 + M[i][1] * x2) % q;
+                    
+                    // Calculate modular short distance
+                    let diff = (b[i] - Ax_i + Math.floor(q/2)) % q - Math.floor(q/2);
+                    if (diff < 0) diff += q;
+                    if (diff > q/2) diff -= q;
+                    
+                    current_dist += diff * diff;
+                }
+                if (current_dist < min_dist) {
+                    min_dist = current_dist;
+                    best_s = [x1, x2];
+                }
+            }
+        }
+
+        document.getElementById('bobS').innerText = JSON.stringify(best_s);
+
+        // Verify if error elimination was successful
+        if (s[0] === best_s[0] && s[1] === best_s[1]) {
+            document.getElementById('status').innerText = "SUCCESS: Noise 100% Eliminated";
+            document.getElementById('status').style.color = "#56d364";
+        } else {
+            document.getElementById('status').innerText = "FAILED: Noise Exceeded Lattice Bounds";
+            document.getElementById('status').style.color = "#ff7b72";
+        }
+    }
+
+    function generateNewKeys() {
+        // Generate new random secret vector s
+        s = [Math.floor(Math.random() * (q-1)) + 1, Math.floor(Math.random() * (q-1)) + 1];
+        
+        // Generate a new random Matrix M
+        for(let i=0; i<4; i++) {
+            M[i] = [Math.floor(Math.random() * q), Math.floor(Math.random() * q)];
+        }
+        simulateProtocol();
+    }
+
+    // Run on startup
+    simulateProtocol();
+</script>
+
+</body>
+</html>
